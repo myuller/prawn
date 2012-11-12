@@ -73,8 +73,10 @@ module Prawn
   #   A hash of style options to style all cells. See the documentation on
   #   Prawn::Table::Cell for all cell style options.
   # +header+::
-  #   If set to +true+, the first row will be repeated on every page. The
-  #   header must be included as the first row of your data. Row numbering
+  #   If set to +true+, the first row will be repeated on every page.
+  #   If set to +n+ where +n+ is positive integer, the first +n+ rows will be
+  #   repeated on every page. The header must be included as the 
+  #   first row (or first +n+ rows) of your data. Row numbering
   #   (for styling and other row-specific options) always indexes based on
   #   your data array. Whether or not you have a header, row(n) always refers
   #   to the nth element (starting from 0) of the +data+ array.
@@ -207,7 +209,10 @@ module Prawn
     end
 
     # If +true+, designates the first row as a header row to be repeated on
-    # every page. Does not change row numbering -- row numbers always index into
+    # every page.
+    # If +n+ where +n+ is some positive integer then first +n+ rows will be
+    # repeated on every page.
+    # Does not change row numbering -- row numbers always index into
     # the data array provided, with no modification.
     #
     attr_writer :header
@@ -247,6 +252,12 @@ module Prawn
     #
     def draw
       with_position do
+        # determnine real amount of header rows
+        if @header == true
+            header_rows = 1
+        else
+            header_rows = @header
+        end
         # The cell y-positions are based on an infinitely long canvas. The offset
         # keeps track of how much we have to add to the original, theoretical
         # y-position to get to the actual position on the current page.
@@ -276,8 +287,12 @@ module Prawn
 
           # If there isn't enough room left on the page to fit the first data row
           # (excluding the header), start the table on the next page.
-          needed_height = row(0).height
-          needed_height += row(1).height if @header
+          if @header
+              # sum height of all header rows + height of first data row (hence the inclusive range)
+              needed_height = (0..header_rows).inject(0) { |acc, i| acc + row(i).height }
+          else
+              needed_height = row(0).height
+          end
           if needed_height > @pdf.y - ref_bounds.absolute_bottom
             @pdf.bounds.move_past_bottom
             offset = @pdf.y
@@ -288,7 +303,13 @@ module Prawn
         # Duplicate each cell of the header row into @header_row so it can be
         # modified in before_rendering_page callbacks.
         if @header
-          @header_row = Cells.new
+          @header_rows = []
+          (0...header_rows).each do|hidx|
+            hrow = Cells.new
+            row(hidx).each{ |cell| hrow[cell.row, cell.column] = cell.dup }
+            @header_rows << hrow
+          end
+          @header_row = Cells.new # TODO: delete this and 1 under
           row(0).each { |cell| @header_row[cell.row, cell.column] = cell.dup }
         end
 
@@ -310,7 +331,7 @@ module Prawn
             # start a new page or column
             @pdf.bounds.move_past_bottom
             if cell.row > 0 && @header
-              header_height = add_header(cells_this_page, @pdf.cursor, cell.row-1)
+              header_height = add_header(cells_this_page, @pdf.cursor, cell.row-header_rows)
             else
               header_height = 0
             end
@@ -330,10 +351,10 @@ module Prawn
           y -= @pdf.bounds.absolute_bottom
 
           # Set background color, if any.
-          if @row_colors && (!@header || cell.row > 0)
+          if @row_colors && (!@header || cell.row > header_rows-1)
             # Ensure coloring restarts on every page (to make sure the header
             # and first row of a page are not colored the same way).
-            index = cell.row - [started_new_page_at_row, @header ? 1 : 0].max
+            index = cell.row - [started_new_page_at_row, @header ? header_rows : 0].max
             cell.background_color ||= @row_colors[index % @row_colors.length]
           end
 
@@ -481,19 +502,24 @@ module Prawn
       cells
     end
 
-    # Add the header row to the given array of cells at the given y-position.
-    # Number the row with the given +row+ index, so that the header appears (in
+    # Add the header rows to the given array of cells at the given y-position.
+    # Number the rows starting with the given +row+ index, so that the header appears (in
     # any Cells built for this page) immediately prior to the first data row on
     # this page.
     #
     # Return the height of the header.
     #
     def add_header(page_of_cells, y, row)
-      @header_row.each do |cell|
-        cell.row = row
-        page_of_cells << [cell, [cell.x, y]]
+      total_height = 0
+      @header_rows.each do|hrow|
+        hrow.each do |cell|
+          cell.row = row
+          page_of_cells << [cell, [cell.x, y]]
+        end
+        row += 1
+        total_height += hrow.height
       end
-      @header_row.height
+      total_height
     end
 
     # Raises an error if the data provided cannot be converted into a valid
