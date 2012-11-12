@@ -518,6 +518,7 @@ module Prawn
         end
         row += 1
         total_height += hrow.height
+        y -= hrow.height
       end
       total_height
     end
