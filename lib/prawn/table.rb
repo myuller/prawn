@@ -300,17 +300,19 @@ module Prawn
           end
         end
 
-        # Duplicate each cell of the header row into @header_row so it can be
+        # Duplicate each cell of the header row into @header_rows so it can be
         # modified in before_rendering_page callbacks.
         if @header
           @header_rows = []
           (0...header_rows).each do|hidx|
             hrow = Cells.new
-            row(hidx).each{ |cell| hrow[cell.row, cell.column] = cell.dup }
+            row(hidx).each do|cell|
+              duplicated = cell.dup
+              hrow[cell.row, cell.column] = duplicated
+              p [cell.content, cell.spanned_content_height , duplicated.spanned_content_height]
+            end
             @header_rows << hrow
           end
-          @header_row = Cells.new # TODO: delete this and 1 under
-          row(0).each { |cell| @header_row[cell.row, cell.column] = cell.dup }
         end
 
         # Track cells to be drawn on this page. They will all be drawn when this
@@ -505,7 +507,9 @@ module Prawn
     # Add the header rows to the given array of cells at the given y-position.
     # Number the rows starting with the given +row+ index, so that the header appears (in
     # any Cells built for this page) immediately prior to the first data row on
-    # this page.
+    # this page (XXX: not true in current implementation, because
+    # updating row index for cell with dummy_cells (spanned) breaks proper height calculation
+    # in cell.rb:Table::Cell#height method)
     #
     # Return the height of the header.
     #
@@ -513,7 +517,7 @@ module Prawn
       total_height = 0
       @header_rows.each do|hrow|
         hrow.each do |cell|
-          cell.row = row
+          #cell.row = row # XXX: compatibility is broken here
           page_of_cells << [cell, [cell.x, y]]
         end
         row += 1

@@ -312,6 +312,7 @@ module Prawn
           row_heights[cell.row] = [row_heights[cell.row], cell.height].max
         end
         row_heights[row] = [row_heights[row], height_ignoring_span].max
+        p [ @content, row_heights ]
         row_heights.values.inject(0, &:+)
       end
 
