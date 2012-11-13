@@ -309,7 +309,6 @@ module Prawn
             row(hidx).each do|cell|
               duplicated = cell.dup
               hrow[cell.row, cell.column] = duplicated
-              p [cell.content, cell.spanned_content_height , duplicated.spanned_content_height]
             end
             @header_rows << hrow
           end
